@@ -1408,6 +1408,9 @@ class RegexTests(unittest.TestCase):
         self.assertEqual(regex.search(r"(?:(?:ab)+c)+", "abcabc").span(), (0,
           6))
 
+        # Hg issue 286.
+        self.assertEqual(regex.search(r"(?:a+){2,}", "aaa").span(), (0, 3))
+
     def test_lookbehind(self):
         self.assertEqual(regex.search(r"123(?<=a\d+)", "a123").span(), (1, 4))
         self.assertEqual(regex.search(r"123(?<=a\d+)", "b123"), None)
@@ -1534,15 +1537,15 @@ class RegexTests(unittest.TestCase):
         text = u"The  fox"
         self.assertEqual(regex.split(ur'(?V1)\b', text), [u'', u'The', u'  ',
           u'fox', u''])
-        self.assertEqual(regex.split(ur'(?V1w)\b', text), [u'', u'The', u' ',
-          u' ', u'fox', u''])
+        self.assertEqual(regex.split(ur'(?V1w)\b', text), [u'', u'The', u'  ',
+          u'fox', u''])
 
         text = u"can't aujourd'hui l'objectif"
         self.assertEqual(regex.split(ur'(?V1)\b', text), [u'', u'can', u"'",
           u't', u' ', u'aujourd', u"'", u'hui', u' ', u'l', u"'", u'objectif',
           u''])
         self.assertEqual(regex.split(ur'(?V1w)\b', text), [u'', u"can't", u' ',
-          u"aujourd'hui", u' ', u"l'", u'objectif', u''])
+          u"aujourd'hui", u' ', u"l'objectif", u''])
 
     def test_line_boundary(self):
         self.assertEqual(regex.findall(r".+", "Line 1\nLine 2\n"), ["Line 1",
@@ -2782,6 +2785,10 @@ xyzabc
         self.assertEqual(regex.fullmatch(r"(?:cat){e<=1} (?:cat){e<=1}",
           "cat cot").fuzzy_counts, (1, 0, 0))
 
+        # Incorrect fuzzy changes
+        self.assertEqual(regex.search(r"(?e)(GTTTTCATTCCTCATA){i<=4,d<=4,s<=4,i+d+s<=8}",
+          "ATTATTTATTTTTCATA").fuzzy_changes, ([0, 6, 10, 11], [3], []))
+
     def test_recursive(self):
         self.assertEqual(regex.search(r"(\w)(?:(?R)|(\w?))\1", "xx")[ : ],
           ("xx", "x", ""))
@@ -3850,6 +3857,34 @@ thing
           partial=True).span(), (0, 7))
         self.assertEqual(regex.search(r'(?r):[a-z]*? [a-z]+', 'foo bar',
           partial=True).span(), (0, 7))
+
+        # Hg issue 291: Include Script Extensions as a supported Unicode property
+        self.assertEqual(bool(regex.match(ur'(?u)\p{Script:Beng}',
+          u'\u09EF')), True)
+        self.assertEqual(bool(regex.match(ur'(?u)\p{Script:Bengali}',
+          u'\u09EF')), True)
+        self.assertEqual(bool(regex.match(ur'(?u)\p{Script_Extensions:Bengali}',
+          u'\u09EF')), True)
+        self.assertEqual(bool(regex.match(ur'(?u)\p{Script_Extensions:Beng}',
+          u'\u09EF')), True)
+        self.assertEqual(bool(regex.match(ur'(?u)\p{Script_Extensions:Cakm}',
+          u'\u09EF')), True)
+        self.assertEqual(bool(regex.match(ur'(?u)\p{Script_Extensions:Sylo}',
+          u'\u09EF')), True)
+
+        # Hg issue #293: scx (Script Extensions) property currently matches
+        # incorrectly
+        self.assertEqual(bool(regex.match(ur'(?u)\p{scx:Latin}', u'P')), True)
+        self.assertEqual(bool(regex.match(ur'(?u)\p{scx:Ahom}', u'P')), False)
+        self.assertEqual(bool(regex.match(ur'(?u)\p{scx:Common}', u'4')), True)
+        self.assertEqual(bool(regex.match(ur'(?u)\p{scx:Caucasian_Albanian}', u'4')),
+          False)
+        self.assertEqual(bool(regex.match(ur'(?u)\p{scx:Arabic}', u'\u062A')), True)
+        self.assertEqual(bool(regex.match(ur'(?u)\p{scx:Balinese}', u'\u062A')),
+          False)
+        self.assertEqual(bool(regex.match(ur'(?u)\p{scx:Devanagari}', u'\u091C')),
+          True)
+        self.assertEqual(bool(regex.match(ur'(?u)\p{scx:Batak}', u'\u091C')), False)
 
     def test_subscripted_captures(self):
         self.assertEqual(regex.match(r'(?P<x>.)+',
